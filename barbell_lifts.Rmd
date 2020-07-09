@@ -63,7 +63,7 @@ form_test <- format_df(testing)
 
 With this, we can preprocess the data automatically for prediction and use it to train our ML model:
 
-### Training and Prediction
+### Training
 
 ```{r, cache=TRUE}
 prep <- preProcess(form_train)
@@ -85,10 +85,28 @@ stopCluster(cl)
 
 tn
 ```
+#### Cross Validation
 
-Running this calculation (with only 10k samples instead of the full set) took roughly 1.5 hours on my machine, and using the results from the prediction, i.e.:
+Since we are using a random forest model, employing a cross validation mechanism to split the training data set into chunks is not necessary.
+The random forest algorithm already uses a sub-sampling approach for observations (boosting) and variables for building the prediction model.
+
+#### Out of Sample/Bag Error
+
+Random forests calculating their out of sample error performance based on the samples not used for boosting (hence called out of bag error rate).
+For the trained model, this is quite low (< 1%):
+
+```{r, cache=TRUE}
+print(paste("Out of bag error: ", tail(tn$finalModel$err.rate[,1], n=1)))
+```
+```{r, cache=TRUE}
+plot(tn$finalModel$err.rate[,1], type = "l", ylab="OOB Error")
+```
+
+### Prediction
+
+We simply run the prediction on our prepared test data set:
 
 ```{r}
 predict(tn, prep_test)
 ```
-... results in a full score on the quiz, so I submit this as my solution.
+... which results in a full score on the quiz.
