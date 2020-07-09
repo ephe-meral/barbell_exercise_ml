@@ -1,0 +1,94 @@
+---
+title: "Barbell Lifts"
+author: "Johanna Appel"
+date: "7/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=5, fig.height=3, fig.align='center') 
+library(caret)
+library(dplyr)
+library(lattice)
+library(reshape2)
+library(doParallel)
+```
+
+*This document is authored by Johanna Appel for the Practical Machine Learning Coursera Course. Do not plagiarize! If you see this document used as a submission by someone other than the author, please report!*
+
+### Overview
+
+In this document, we analyze and predict barbell lift exercise correctness based on data collected from different wearable sensor devices.
+
+### Exploratory Analysis
+
+```{r, cache=TRUE}
+training = read.csv('./data/pml-training.csv', na.strings=c("","NA"))
+testing = read.csv('./data/pml-testing.csv', na.strings=c("","NA"))
+```
+
+A preliminary look at the data reveals that it contains time series(es) and according measurement variables.
+
+Since there are some many measurement variables, it is hard to do any meaningful analysis manually.
+
+What we note, however, is that for a lot of observations the variables seem to be empty or NULL.
+
+Additionally, the task is to predict the 'classe' variable for the test set, which only contains 20 observations - a lot of which are slices from different time series. That means we cannot make use of the structure of the time series to predict the 'classe', and need to only make use of the measurements.
+
+### Data Transformation
+
+We'll start by creating a data set that contains only measurements and no time series. We'll also impute any 'NA' value with 0 as a default measurement.
+
+```{r, cache=TRUE}
+format_df <- function(data) {
+  # Remove the time series data
+  df <- data[,-(1:7)]
+  # Remove columns that contain no data
+  df <- df %>% select(
+    -kurtosis_yaw_belt, -skewness_yaw_belt, -amplitude_yaw_belt,
+    -kurtosis_yaw_dumbbell, -skewness_yaw_dumbbell, -amplitude_yaw_dumbbell)
+  # Make sure everything is numeric
+  df <- df %>% mutate(across(everything(), as.numeric))
+  # Replace empty measurement values with 0 by default
+  df[is.na(df)] <- 0
+  return(df)
+}
+
+# `testing` doesnt have a `classe` column, so to treat them similarly, we have to:
+form_train <- format_df(training %>% select(-classe))
+form_train$classe <- training$classe
+# So that we can simply do:
+form_test <- format_df(testing)
+```
+
+With this, we can preprocess the data automatically for prediction and use it to train our ML model:
+
+### Training and Prediction
+
+```{r, cache=TRUE}
+prep <- preProcess(form_train)
+prep_train <- predict(prep, form_train)
+prep_test <- predict(prep, form_test)
+```
+
+Since we have lots of different variables of which we don't know the relevance, and we have to predict a categorical variable we'll try out random forests and see how well they perform on the test set (by doing the Coursera Quiz).
+
+```{r, cache=TRUE}
+library(doParallel)
+cl <- makePSOCKcluster(4)
+registerDoParallel(cl)
+
+smp <- runif(10000, min=1, max=length(prep_train$classe))
+tn <- train(classe ~ ., data=prep_train[smp,], method="rf")
+
+stopCluster(cl)
+
+tn
+```
+
+Running this calculation (with only 10k samples instead of the full set) took roughly 1.5 hours on my machine, and using the results from the prediction, i.e.:
+
+```{r}
+predict(tn, prep_test)
+```
+... results in a full score on the quiz, so I submit this as my solution.
